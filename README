@@ -1,0 +1,36 @@
+这是一个简单的Paxos的C代码实现。Paxos是一个解决分布式系统一致性问题的协议，协议的具体内容可以参考http://en.wikipedia.org/wiki/Paxos_(computer_science)
+
+程序的fork自https://github.com/oilbeater/Paxos  2012/5/21
+我做了一些修改，原程序是proposer通知的learner，协议里是accepter通知learner,我做了修改
+输入格式做了小的修改，提示语言做了点儿修改
+
+实现：
+learner：
+	1.绑定套接字，监听端口
+	2.学习接收accepter发来的决议，并打印输出
+accepter部分实现：
+	1.绑定套接字，监听端口
+	2.开一个线程，接收一个proposer的通信
+	3.Phase 1b:检查这个proposer number 是不是当前最大的，若是，则给proposer发送promise.因为是多线程的，线程间用共享内存通信，各个与不同proposer通信的线程都能看到当前最大的promise number,程序中就是共享全局变量sn.
+	4.Phase 2b:检查这个proposer number是不是当前最大的proposer number，若是则接收这个决议，并通知所有learner，否则忽略之，accepter并没有告知proposer，它的提议是否通过了
+proposer部分实现：
+	1.绑定套接字，与accpter们建立通信
+	2.Phase 1a:发起决议，发送proposer,格式为“0_proposernumber”,为了方便起见，这个程序支持的proposernumber为10以内，应该是为了读数组时(c语言里没有split)省去麻烦
+	3.Phase 2a:收集回复，过半数则发送proposer value,格式为“1_proposernumber_proposervalue”,中间无空格，否则，重新Phase 1a
+Ps:参考README
+
+
+演示：
+make
+运行learner1,learner2,accepter1,accepter2,accepter3,proposer
+proposer一定要最后打开，这个程序中，是proposer去主动连接accepter的，accepter在Phase2b时主动连接learner
+proposer只支持10以内的数
+
+Failure 1:failure of Acceptor
+	Phase 1a结束后，kill一个accepter进程，决议依然能够达成
+Failure 2:failure of redundant Learner
+	Phase 1a结束后，kill一个learner进程，learner只接收，决议依然能够达成
+Failure 3:failure of Proposer
+	Phase 1a结束后，kill这个proposer，重新开启一个新的proposer，即新的leader，决议从新开启，依然能够达成
+Failure 4:dueling Proposers
+	Phase 1a结束后，再开启一个proposer,新proposer发送更大的proposer id,旧proposer进入Phase 2a时，它的提案会被accepter抛弃，新决议能够达成
